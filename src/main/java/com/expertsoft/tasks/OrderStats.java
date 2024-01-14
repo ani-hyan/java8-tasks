@@ -4,8 +4,10 @@ import com.expertsoft.model.*;
 import com.expertsoft.util.AveragingBigDecimalCollector;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 /**
@@ -76,18 +78,15 @@ class OrderStats {
      * @return map, where for each customer email there is a long referencing a number of different credit cards this customer uses.
      */
     static Map<String, Long> cardsCountForCustomer(final Stream<Customer> customers) {
-        Map<String, Long> cardCount = new HashMap<>();
-        customers.forEach(
-                x ->
-                {
-                    Set<String> cards = new HashSet<>();
-                    x.getOrders().forEach(
-                            z -> cards.add(z.getPaymentInfo().getCardNumber())
-                    );
-                    cardCount.put(x.getEmail(), (long) cards.size());
-                }
-        );
-        return cardCount;
+        return customers.
+                collect(Collectors.toMap(
+                        Customer::getEmail,
+                        x -> x.getOrders().stream()
+                                .map(z -> z.getPaymentInfo().getCardNumber())
+                                .collect(Collectors.toSet())
+                                .stream()
+                                .count()
+                ));
     }
 
     /**
@@ -140,10 +139,17 @@ class OrderStats {
      */
     static BigDecimal averageProductPriceForCreditCard(final Stream<Customer> customers, final String cardNumber) {
         final AveragingBigDecimalCollector collector = new AveragingBigDecimalCollector();
-        customers.forEach(x -> x.getOrders()
-                .stream()
+
+        return customers
+                .flatMap(customer -> customer.getOrders()
+                        .stream())
                 .filter(order -> order.getPaymentInfo().getCardNumber().equals(cardNumber))
-        );
-        return null;
+                .flatMap(order -> order.getOrderItems()
+                        .stream()
+                        .flatMap(orderItem -> IntStream.range(0, orderItem.getQuantity())
+                                        .mapToObj(x -> orderItem.getProduct().getPrice())))
+                .collect(collector);
+
     }
+
 }
